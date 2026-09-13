@@ -455,6 +455,7 @@ void PathDrawTool::CommitToLayer(const CanvasContext& ctx) {
 
     points.clear();
     draggingPointIndex = -1;
+    isDraggingLine = false;
 }
 
 bool PathDrawTool::ProcessCanvasInput(const CanvasContext& ctx) {
@@ -465,9 +466,37 @@ bool PathDrawTool::ProcessCanvasInput(const CanvasContext& ctx) {
     const bool inCanvas = (ctx.hovered || ctx.active);
     bool changed = false;
 
+    // Toggle smoothing mode with 'C'
+    if (inCanvas && ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+        smoothingMode = (smoothingMode == SmoothingMode::Standard) 
+            ? SmoothingMode::Spherical 
+            : SmoothingMode::Standard;
+        changed = true;
+    }
+
+    // Alt + 1 / 2 / 3 + Scroll Wheel to adjust start, middle, and end thickness
+    const float wheel = ImGui::GetIO().MouseWheel;
+    const bool altDown = ImGui::GetIO().KeyAlt;
+    if (inCanvas && altDown && wheel != 0.0f) {
+        constexpr float thicknessStep = 0.5f;
+        if (ImGui::IsKeyDown(ImGuiKey_1) || ImGui::IsKeyDown(ImGuiKey_Keypad1)) {
+            thicknessStart = std::clamp(thicknessStart + wheel * thicknessStep, 0.5f, 64.0f);
+            changed = true;
+        }
+        if (ImGui::IsKeyDown(ImGuiKey_2) || ImGui::IsKeyDown(ImGuiKey_Keypad2)) {
+            thicknessMiddle = std::clamp(thicknessMiddle + wheel * thicknessStep, 0.5f, 64.0f);
+            changed = true;
+        }
+        if (ImGui::IsKeyDown(ImGuiKey_3) || ImGui::IsKeyDown(ImGuiKey_Keypad3)) {
+            thicknessEnd = std::clamp(thicknessEnd + wheel * thicknessStep, 0.5f, 64.0f);
+            changed = true;
+        }
+    }
+
     if (inCanvas && ImGui::IsKeyPressed(ImGuiKey_Backspace, false) && !points.empty()) {
         points.pop_back();
         draggingPointIndex = -1;
+        isDraggingLine = false;
         changed = true;
     }
 
@@ -481,31 +510,54 @@ bool PathDrawTool::ProcessCanvasInput(const CanvasContext& ctx) {
     if (inCanvas && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && hoveredPoint >= 0) {
         points.erase(points.begin() + hoveredPoint);
         draggingPointIndex = -1;
+        isDraggingLine = false;
         changed = true;
     }
 
     if (!inCanvas || ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
         if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             draggingPointIndex = -1;
+            isDraggingLine = false;
         }
         return changed;
     }
 
+    const ImVec2 currentMouseImg = MouseToImage(ctx);
+    const bool shiftDown = ImGui::GetIO().KeyShift;
+
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         if (hoveredPoint >= 0) {
             draggingPointIndex = hoveredPoint;
+            isDraggingLine = false;
+        } else if (shiftDown) {
+            // Shift + LMB click outside any point -> Drag whole line
+            isDraggingLine = true;
+            draggingPointIndex = -1;
+            lastMouseImagePos = currentMouseImg;
         } else {
-            ImVec2 p = MouseToImage(ctx);
+            // Normal LMB click outside any point -> Add new point
+            ImVec2 p = currentMouseImg;
             p.x = std::clamp(p.x, 0.0f, static_cast<float>(ctx.project.w - 1));
             p.y = std::clamp(p.y, 0.0f, static_cast<float>(ctx.project.h - 1));
             points.push_back(p);
             draggingPointIndex = static_cast<int>(points.size()) - 1;
+            isDraggingLine = false;
             changed = true;
         }
     }
 
-    if (draggingPointIndex >= 0 && ImGui::IsMouseDown(ImGuiMouseButton_Left) && draggingPointIndex < static_cast<int>(points.size())) {
-        ImVec2 p = MouseToImage(ctx);
+    if (isDraggingLine && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        const ImVec2 delta(currentMouseImg.x - lastMouseImagePos.x, currentMouseImg.y - lastMouseImagePos.y);
+        if (delta.x != 0.0f || delta.y != 0.0f) {
+            for (auto& pt : points) {
+                pt.x += delta.x;
+                pt.y += delta.y;
+            }
+            lastMouseImagePos = currentMouseImg;
+            changed = true;
+        }
+    } else if (draggingPointIndex >= 0 && ImGui::IsMouseDown(ImGuiMouseButton_Left) && draggingPointIndex < static_cast<int>(points.size())) {
+        ImVec2 p = currentMouseImg;
         p.x = std::clamp(p.x, 0.0f, static_cast<float>(ctx.project.w - 1));
         p.y = std::clamp(p.y, 0.0f, static_cast<float>(ctx.project.h - 1));
         points[static_cast<size_t>(draggingPointIndex)] = p;
@@ -514,6 +566,7 @@ bool PathDrawTool::ProcessCanvasInput(const CanvasContext& ctx) {
 
     if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
         draggingPointIndex = -1;
+        isDraggingLine = false;
     }
 
     return changed;
@@ -574,12 +627,16 @@ void PathDrawTool::DrawSettingsUi() {
     if (ImGui::Button("Clear Path")) {
         points.clear();
         draggingPointIndex = -1;
+        isDraggingLine = false;
     }
 
     ImGui::Separator();
     ImGui::TextUnformatted("LMB click: add point");
+    ImGui::TextUnformatted("Shift + LMB drag outside point: move whole line");
     ImGui::TextUnformatted("LMB hold/drag: adjust new point or move existing point");
     ImGui::TextUnformatted("RMB click: remove hovered point");
+    ImGui::TextUnformatted("C key: toggle Standard/Spherical mode");
+    ImGui::TextUnformatted("Alt + 1/2/3 + Wheel: adjust start/mid/end thickness");
     ImGui::TextUnformatted("Backspace: remove most recent point");
     ImGui::TextUnformatted("Space: commit path to selected layer");
 }

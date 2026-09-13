@@ -12,8 +12,7 @@
 #include "app/gui/IllustratorWindow.hpp"
 #include "app/gui/LayerManagerWindow.hpp"
 #include "app/gui/ToolRegistryWindow.hpp"
-#include "app/gui/tools/PencilTool.hpp"
-#include "app/gui/tools/PathDrawTool.hpp"
+#include "app/gui/tools/Tools.hpp"
 #include "app/gui/HotkeyWindow.hpp"
 #include "app/gui/SampleWindow.hpp"
 

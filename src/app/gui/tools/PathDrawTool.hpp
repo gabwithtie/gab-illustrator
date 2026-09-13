@@ -24,6 +24,8 @@ public:
 private:
     std::vector<ImVec2> points;
     int draggingPointIndex{-1};
+    bool isDraggingLine{false};
+    ImVec2 lastMouseImagePos{0.0f, 0.0f};
 
     ImVec4 color{1.0f, 1.0f, 1.0f, 1.0f};
     float thicknessStart{2.0f};

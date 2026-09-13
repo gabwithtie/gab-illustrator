@@ -13,6 +13,8 @@ set(${CUR_TARGET_NAME}_src
 	gui/HotkeyWindow.cpp
 	gui/tools/PencilTool.cpp
 	gui/tools/PathDrawTool.cpp
+	gui/tools/SelectTool.cpp
+	gui/tools/TransformTool.cpp
 	gui/SampleWindow.cpp
 
 	gui/input/InputWindow.cpp
